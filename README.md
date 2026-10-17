@@ -24,18 +24,11 @@ Open Docker Desktop and leave it running in the background. The steps below will
 If you haven't cloned the project yet, clone it first:
 
 ```bash
-git clone <https://github.com/Nisura-W/SWE40006-Group-Project>
+git clone https://github.com/Nisura-W/SWE40006-Group-Project.git
 cd SWE40006-Group-Project
 ```
 
-Then switch to the branch that has the app:
-
-```bash
-git fetch origin
-git checkout Yarinsa-test
-```
-
-> Once this branch is merged into `main`, you can skip the checkout and stay on `main`.
+The application is available on `main`.
 
 ### 2. Start the app
 
@@ -123,3 +116,10 @@ You can change these values by putting them in front of the `docker compose` com
 | `SECRET_KEY` | Flask secret key | development placeholder |
 
 The default values are for local development only. Use proper secrets in any real deployment.
+
+## CI and release deployment
+
+See [the release handoff](docs/release-handoff.md) for runner setup, secret names,
+Person 4's test interfaces, local rollback checks and the commissioning checklist.
+Release deployment is manual and disabled by default. The AWS Compose file pulls
+an immutable `IMAGE_REF`; it no longer builds on the deployment server.

@@ -1,0 +1,167 @@
+name: Release - Manual commissioning
+# No push trigger until AWS deployment has been commissioned by the team.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+# One lock spans build, test and production. Never interrupt an active deploy.
+concurrency:
+  group: taskmanager-release
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main' && vars.RELEASE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      image: ${{ steps.image.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+      - name: Validate configuration and required test suites
+        env:
+          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_PULL_TOKEN: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          TEST_SECRET_KEY: ${{ secrets.TEST_SECRET_KEY }}
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          PROD_SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+        run: python -m scripts.preflight
+      - run: pip install -r requirements-ci.txt
+      - run: python -m pytest tests/test_app.py --cov=app --cov-fail-under=80 --cov-report=xml:reports/coverage.xml --junitxml=reports/unit.xml
+      - run: python -m pytest tests/pipeline --junitxml=reports/pipeline.xml
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        id: publish
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ vars.DOCKERHUB_IMAGE }}:sha-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+      - name: Record immutable release image
+        id: image
+        env:
+          IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          echo "ref=$IMAGE@$DIGEST" >> "$GITHUB_OUTPUT"
+          mkdir -p reports
+          printf '%s@%s\n' "$IMAGE" "$DIGEST" > reports/image.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-build-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/
+          retention-days: 14
+  test:
+    needs: build
+    runs-on: [self-hosted, linux, x64, taskmanager-test]
+    timeout-minutes: 20
+    env:
+      IMAGE_REF: ${{ needs.build.outputs.image }}
+      BUILD_ID: ${{ github.sha }}
+      DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      SECRET_KEY: ${{ secrets.TEST_SECRET_KEY }}
+      BASE_URL: http://127.0.0.1
+      EXPECTED_BUILD_ID: ${{ github.sha }}
+      APP_PORT: '80'
+      STATE_DIR: /opt/taskmanager/test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
+      - name: Start candidate image and run smoke test
+        run: |
+          rm -f "$STATE_DIR/report.json" "$STATE_DIR/candidate.log" "$STATE_DIR/recovery.log"
+          python3 -m scripts.deploy --environment test --state-dir "$STATE_DIR"
+      - name: Unit tests, PostgreSQL integration and Selenium gate
+        run: |
+          python3 -m venv .release-venv
+          .release-venv/bin/pip install -r requirements-ci.txt -r requirements-e2e.txt
+          .release-venv/bin/python -m pytest tests/test_app.py --junitxml=reports/test-unit.xml
+          .release-venv/bin/python -m pytest tests/integration --junitxml=reports/integration.xml
+          .release-venv/bin/python -m pytest tests/e2e --junitxml=reports/e2e.xml
+          .release-venv/bin/python -m scripts.check_reports reports/test-unit.xml reports/integration.xml reports/e2e.xml
+      - name: Collect deployment report
+        if: always()
+        run: |
+          mkdir -p reports
+          if [ -f "$STATE_DIR/report.json" ]; then cp "$STATE_DIR/report.json" reports/deploy.json; fi
+          for log in candidate recovery; do if [ -f "$STATE_DIR/$log.log" ]; then cp "$STATE_DIR/$log.log" reports/; fi; done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-test-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/
+          retention-days: 14
+  production:
+    needs: [build, test]
+    runs-on: [self-hosted, linux, x64, taskmanager-production]
+    timeout-minutes: 20
+    env:
+      IMAGE_REF: ${{ needs.build.outputs.image }}
+      BUILD_ID: ${{ github.sha }}
+      DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+      SECRET_KEY: ${{ secrets.PROD_SECRET_KEY }}
+      APP_PORT: '80'
+      STATE_DIR: /opt/taskmanager/production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
+      - name: Deploy, verify and recover on failure
+        run: |
+          rm -f "$STATE_DIR/report.json" "$STATE_DIR/candidate.log" "$STATE_DIR/recovery.log"
+          python3 -m scripts.deploy --environment production --state-dir "$STATE_DIR"
+      - name: Collect deployment report
+        if: always()
+        run: |
+          mkdir -p reports
+          if [ -f "$STATE_DIR/report.json" ]; then cp "$STATE_DIR/report.json" reports/deploy.json; fi
+          for log in candidate recovery; do if [ -f "$STATE_DIR/$log.log" ]; then cp "$STATE_DIR/$log.log" reports/; fi; done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-production-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/
+          retention-days: 14
+  notify:
+    needs: [build, test, production]
+    if: always() && (needs.build.result == 'failure' || needs.test.result == 'failure' || needs.production.result == 'failure' || cancelled())
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Create failure notification for repository subscribers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          PROD_RESULT: ${{ needs.production.result }}
+        run: |
+          printf 'Release run: %s\n\nBuild: %s\nTest: %s\nProduction: %s\n\nInspect deployment reports for rollback status. A cancelled run or failed recovery needs manual inspection.\n' "$RUN_URL" "$BUILD_RESULT" "$TEST_RESULT" "$PROD_RESULT" > "$RUNNER_TEMP/release-failure.txt"
+          gh issue create --title "Release $GITHUB_RUN_ID failed or was cancelled" --body-file "$RUNNER_TEMP/release-failure.txt"

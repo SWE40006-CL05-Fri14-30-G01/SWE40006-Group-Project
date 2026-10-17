@@ -1,10 +1,12 @@
 services:
   web:
-    build: .
+    image: ${IMAGE_REF:?IMAGE_REF must be an immutable image digest}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
-      - "80:5000"
+      - "${APP_PORT:-80}:5000"
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
-      BUILD_ID: ${BUILD_ID:-AWS Test}
+      BUILD_ID: ${BUILD_ID:?BUILD_ID must identify the release}
     restart: unless-stopped
