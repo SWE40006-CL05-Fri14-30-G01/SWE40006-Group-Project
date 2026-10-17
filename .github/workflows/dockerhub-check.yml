@@ -1,0 +1,78 @@
+name: Docker Hub - Check access
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      image: ${{ steps.record.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check settings are present
+        env:
+          IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+          USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          PUSH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          PULL_TOKEN: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
+        run: |
+          for setting in IMAGE USERNAME PUSH_TOKEN PULL_TOKEN; do
+            if [ -z "${!setting}" ]; then
+              echo "::error::Missing $setting; check the Docker Hub Actions settings."
+              exit 1
+            fi
+          done
+          if [[ ! "$IMAGE" =~ ^[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9._-]*$ ]]; then
+            echo '::error::Image must be namespace/repository without a tag.'
+            exit 1
+          fi
+      - name: Sign in with push token
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push test image
+        id: publish
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ vars.DOCKERHUB_IMAGE }}:connection-check-${{ github.run_id }}-${{ github.run_attempt }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+      - name: Record image digest
+        id: record
+        env:
+          IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          echo "image=$IMAGE@$DIGEST" >> "$GITHUB_OUTPUT"
+          printf 'Uploaded test image: %s@%s\n' "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+
+  pull:
+    needs: push
+    # A fresh machine has neither the image nor the push token login cached.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Sign in with pull token
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
+      - name: Download exact published image
+        env:
+          IMAGE_REF: ${{ needs.push.outputs.image }}
+        run: |
+          docker pull "$IMAGE_REF"
+          docker image inspect "$IMAGE_REF" --format '{{.Id}}'
+          printf 'Push and pull access verified for %s. No AWS deployment was performed.\n' "$IMAGE_REF" >> "$GITHUB_STEP_SUMMARY"
