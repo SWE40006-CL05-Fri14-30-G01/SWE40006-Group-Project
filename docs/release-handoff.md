@@ -58,6 +58,17 @@ Never put credentials in Git, issue bodies or screenshots. The compose file requ
 The `host.docker.internal` mapping supports the disposable local database check;
 AWS uses the RDS endpoint in the supplied URL.
 
+## Check Docker Hub access before AWS setup
+
+After the workflow is reviewed and merged to `main`, open Actions >
+Docker Hub - Check access > Run workflow and select `main`.
+It pushes a `connection-check-<run>-<attempt>` image, then a fresh runner logs
+in with the pull token and downloads the same digest. Both jobs must pass.
+The run summary records the digest. This verifies authentication and push/pull
+operations, not that the pull token lacks write permission; check that in Docker Hub.
+The test image remains in Docker Hub and has the repository's visibility.
+No `latest` or release tag is changed, and AWS deployment stays disabled.
+
 ## Person 4: acceptance-test contract
 
 Supply `requirements-e2e.txt`, `tests/integration/test_*.py` and
@@ -109,12 +120,28 @@ It needs ports 15000, 15432 and 18080 free. The disposable PostgreSQL port is pu
 on the host to allow access from the app container: run this on a trusted machine.
 Local test images/build cache remain for reuse. Reports go to `reports/container-check/`.
 
+## Manual review before merging
+
+The team will use manual review while the repository remains private on the
+current plan. GitHub does not enforce branch protection or rulesets for this setup.
+
+- Make changes on a separate branch and open a pull request; do not push directly to `main`.
+- Get approval from at least one other team member.
+- Confirm all CI checks pass for the latest changes and resolve review comments before merging.
+- If code changes after approval, ask the reviewer to check it again.
+- Do not merge a failed or still-running check. The person merging verifies these conditions.
+
+This is a team agreement, not an enforced GitHub merge restriction. The release
+workflow still blocks production when its required tests fail. Manual code review
+is separate from deployment: releases remain manually started during commissioning.
+
 ## Commissioning checklist
 
-1. Merge reviewed changes and acceptance suites to `main`; confirm CI passes.
+1. Confirm CI passes and obtain a teammate's approval before merging changes and
+   acceptance suites to `main`.
 2. Configure variables/secrets, start both runners, and verify RDS connectivity.
-3. Resolve branch-protection plan support. Until enforced, require team review
-   by agreement and avoid direct pushes to main. CI alone does not prevent merging.
+3. Confirm everyone follows the manual review process above. A plan upgrade is
+   not required to continue commissioning.
 4. Set `RELEASE_ENABLED=true`, dispatch the release from main, and verify the
    production build, data persistence, evidence and notification delivery.
 5. Exercise blocked tests, failed deployment, successful rollback, first-release
