@@ -1,5 +1,0 @@
-""" Asks Docker to open port 5433 on local device"""
-services:
-db:
-ports:
-- "5433:5432"
