@@ -1,0 +1,43 @@
+
+name: AWS - Verify Docker image pull
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-ec2:
+    runs-on: [self-hosted, linux, x64, taskmanager-test]
+    timeout-minutes: 10
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
+
+      - name: Pull image on Test EC2
+        env:
+          IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+        run: |
+          docker pull "$IMAGE@sha256:d94b9368caa2ed240e398eef716b32c9dabee16900dd5e120f7f5ed72238fce1"
+          docker image inspect "$IMAGE@sha256:d94b9368caa2ed240e398eef716b32c9dabee16900dd5e120f7f5ed72238fce1" --format '{{.Id}}'
+
+  production-ec2:
+    runs-on: [self-hosted, linux, x64, taskmanager-production]
+    timeout-minutes: 10
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
+
+      - name: Pull image on Production EC2
+        env:
+          IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+        run: |
+          docker pull "$IMAGE@sha256:d94b9368caa2ed240e398eef716b32c9dabee16900dd5e120f7f5ed72238fce1"
+          docker image inspect "$IMAGE@sha256:d94b9368caa2ed240e398eef716b32c9dabee16900dd5e120f7f5ed72238fce1" --format '{{.Id}}'
