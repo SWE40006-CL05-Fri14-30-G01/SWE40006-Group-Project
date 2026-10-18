@@ -119,4 +119,36 @@ def test_health_endpoint(client):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.is_json
-    assert response.get_json()["status"] == "healthy"
+    body = response.get_json()
+    assert body["status"] == "healthy"
+    assert body["database"] == "ok"
+    assert body["build_id"] == "test-build"
+
+
+def test_health_reports_database_outage(client, monkeypatch):
+    def unreachable(*args, **kwargs):
+        raise RuntimeError("database is down")
+
+    monkeypatch.setattr(db.session, "execute", unreachable)
+    response = client.get("/health")
+    assert response.status_code == 503
+    assert response.get_json()["status"] == "unhealthy"
+
+
+def test_board_works_with_release_smoke_parser(app, client):
+    """scripts/smoke.py reads the board HTML; template changes must not break it."""
+    from scripts.smoke import find_task
+
+    task_id = make_task(app, title="pipeline-smoke-contract")
+    html = client.get("/").get_data(as_text=True)
+    assert find_task(html, "pipeline-smoke-contract") == f"/delete/{task_id}"
+    assert find_task(html, "not-on-the-board") is None
+
+
+def test_board_exposes_selenium_hooks(app, client):
+    task_id = make_task(app, title="Hooked", status="In Progress")
+    html = client.get("/").get_data(as_text=True)
+    assert f'data-testid="task-card" data-task-id="{task_id}" data-status="In Progress"' in html
+    for hook in ("add-task-form", "task-title-input", "task-assignee-input",
+                 "add-task-button", "move-task", "delete-task", "build-id"):
+        assert f'data-testid="{hook}"' in html
