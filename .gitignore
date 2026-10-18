@@ -223,3 +223,6 @@ __marimo__/
 
 # Docker 
 docker-compose.override.yml
+
+# Testing 
+e2e-artifacts/
