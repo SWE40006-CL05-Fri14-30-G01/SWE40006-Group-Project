@@ -1,11 +1,13 @@
-""" Integration Test for Status Change """
+""" Integration Test for Status Change (via running app & PostgreSQL) """
 
 import pytest
-from app import Task, db 
+import requests 
+from sqlalchemy import text 
+
+def insert_task(db,title, status="To Do")
 
 @pytest.mark.integration 
 def test_change_status(int_test_app, int_test_client):
-
     # Create task directly into the test database 
     with int_test_app.app_context():
         int_test_task = Task(title="[integration-test] Integration Test Task", assignee="Integration Test Assignee")

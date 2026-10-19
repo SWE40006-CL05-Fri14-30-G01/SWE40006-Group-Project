@@ -1,9 +1,10 @@
 import pytest
 import os 
-import sys
+import uuid
+from sqlalchemy import create_engine, text
 
-# Path Setup 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+# App Address Setup 
+INT_TEST_BASE_URL = os.environ.get("BASE_URL", "http://localhost:5000").rstrip("/")
 
 # Safety Check 
 # Ensures that conftest file only runs if the test db is PostgreSQL 
@@ -14,34 +15,39 @@ if not DATABASE_URL.startswith("postgres") or "test" not in DATABASE_URL:
         returncode=2,
         )
 
-from app import Task, db, create_app 
-
 # Task Label 
 # Tasks created in integration tests have a title starting w/ this label 
 INT_TEST_LABEL = "[integration-test]"
 
-# Clears tasks from db 
-def clear_tasks_in_db(app):
-    with app.app_context():
-        db.session.remove()
-        Task.query.filter(Task.title.startswith(INT_TEST_LABEL)).delete(
-            synchronize_session=False
+# Running App 
+# Get where the running app is
+@pytest.fixture(scope="session")
+def int_test_base_url():
+    return INT_TEST_BASE_URL
+
+# Test Database 
+# Provides connection to the test db
+@pytest.fixture(scope="session")
+def int_test_db():
+    engine = create_engine(DATABASE_URL.replace("postgres://", "postgresql://", 1))
+    yield engine 
+    engine.dispose()
+
+# Remove Leftovers from Crashed Runs (only on test labels)
+@pytest.fixture(scope="session", autouse=True)
+def int_test_remove_leftovers(int_test_db):
+    with int_test_db.begin() as conn:
+        conn.execute(
+            text("DELETE FROM tasks WHERE title LIKE :p"), {"p": f"{INT_TEST_LABEL}%"}
         )
-        db.session.commit()
 
-# Test App 
-@pytest.fixture 
-def int_test_app():
-    app = create_app({
-        "TESTING": True,
-        "SECRET_KEY": "test",
-        "BUILD_ID": "integration-test-build",
-    })
-    clear_tasks_in_db(app) # Clears tasks in db BEFORE tests 
-    yield app
-    clear_tasks_in_db(app) # Clears tasks in db AFTER tests 
+# Test Task Title
+# Unique task title which will applied to tasks created during tests
+# Tasks with this title will be deleted after the test 
+@pytest.fixture
+def int_test_title(int_test_db):
+    title = f"{INT_TEST_LABEL} {uuid.uuid4().hex[:8]}" # Builds unique title
+    yield title 
+    with int_test_db.begin() as conn:
+        conn.execution(text("DELETE FROM tasks WHERE title = :t")), {"t": title}) # Clean up
 
-# Test Client 
-@pytest.fixture 
-def int_test_client(int_test_app):
-    return int_test_app.test_client()
