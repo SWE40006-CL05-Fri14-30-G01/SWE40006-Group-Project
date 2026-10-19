@@ -24,6 +24,7 @@ def e2e_driver():
     e2e_options.add_argument("--window-size=1920,1080") # Headless browser + outlining its size
 
     e2e_browser = webdriver.Chrome(options=e2e_options)
+    e2e_browser.set_page_load_timeout(30) # hung page fails the test after 30 seconds 
     yield e2e_browser
 
     try:
@@ -39,6 +40,6 @@ def pytest_runtest_makereport(item,call):
     if browser_test_report.when == "call" and browser_test_report.failed:
         e2e_browser = item.funcargs.get("e2e_driver") # Takes the browser the test was using - must match the name of the fixture exactly 
         if e2e_browser:
-            E2E_ARTIFACT_DIR.mkdri(parents=True, exist_ok=True)
+            E2E_ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
             name = f"{item.name}-{datetime.now():%Y%m%d-%H%M%S}.png"
             e2e_browser.save_screenshot(str(E2E_ARTIFACT_DIR/name)) 
