@@ -6,7 +6,7 @@ import pytest
 from selenium import webdriver 
 
 E2E_BASE_URL = os.environ.get("BASE_URL", "http://localhost:5000").rstrip("/")
-E2E_ARTIFACT_DIR = Path(os.environ.get("E2E_ARTIFACT_DIR", "e2e-artifacts"))
+E2E_ARTIFACT_DIR = Path(os.environ.get("E2E_ARTIFACT_DIR", "reports/e2e-screenshots")) # Screenshots are saved in reports folder
 
 @pytest.fixture(scope="session")
 def e2e_base_url():
@@ -41,5 +41,4 @@ def pytest_runtest_makereport(item,call):
         if e2e_browser:
             E2E_ARTIFACT_DIR.mkdri(exist_ok=True)
             name = f"{item.name}-{datetime.now():%Y%m%d-%H%M%S}.png"
-            e2e_browser.save_screenshot(str(E2E_ARTIFACT_DIR/name)) # Screenshots are saved in e2e-artifacts folder
-
+            e2e_browser.save_screenshot(str(E2E_ARTIFACT_DIR/name)) 
