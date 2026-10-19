@@ -6,7 +6,7 @@ from sqlalchemy import text
 pytestmark = pytest.mark.integration
 
 def insert_task(db, title, status="To Do"):
-    """ Insert a task into the test db + returns its id """
+    # Insert a task into the test db + returns its id 
     with db.begin() as conn:
         return conn.execute(
             text("INSERT INTO tasks (title, assignee, status) "
@@ -15,7 +15,7 @@ def insert_task(db, title, status="To Do"):
         ).scalar_one()
 
 def get_status(db, task_id):
-    """ Read the task's status from the test db """
+    # Read the task's status from the test db 
     with db.connect() as conn:
         return conn.execute(
             text("SELECT status FROM tasks WHERE id = :i"), {"i": task_id}
