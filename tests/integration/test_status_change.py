@@ -1,31 +1,48 @@
 """ Integration Test for Status Change (via running app & PostgreSQL) """
-
 import pytest
 import requests 
 from sqlalchemy import text 
 
-def insert_task(db,title, status="To Do")
+pytestmark = pytest.mark.integration
 
-@pytest.mark.integration 
-def test_change_status(int_test_app, int_test_client):
-    # Create task directly into the test database 
-    with int_test_app.app_context():
-        int_test_task = Task(title="[integration-test] Integration Test Task", assignee="Integration Test Assignee")
-        db.session.add(int_test_task)
-        db.session.commit()
+def insert_task(db, title, status="To Do"):
+    """ Insert a task into the test db + returns its id """
+    with db.begin() as conn:
+        return conn.execute(
+            text("INSERT INTO tasks (title, assignee, status) "
+                 "VALUES (:t, 'Integration Test', :s) RETURNING id"),
+            {"t": title, "s": status},
+        ).scalar_one()
 
-        # Get Test Task's ID 
-        int_test_task_id = int_test_task.id 
+def get_status(db, task_id):
+    """ Read the task's status from the test db """
+    with db.connect() as conn:
+        return conn.execute(
+            text("SELECT status FROM tasks WHERE id = :i"), {"i": task_id}
+        ).scalar_one()
 
-    # Change Status via App's route 
-    int_test_response = int_test_client.post(
-        f"/update/{int_test_task_id}",
+def test_change_status(int_test_base_url, int_test_db, int_test_title):
+    task_id = insert_task(int_test_db, int_test_title)
+
+    # Change status through the app's running route 
+    response = requests.post(
+        f"{int_test_base_url}/update/{task_id}",
         data={"status": "In Progress"},
-        follow_redirects=True,
+        timeout=10,
     )
-    assert int_test_response.status_code == 200
+    assert response.status_code == 200 
 
-    # Check status changed by checking value from row from PostgreSQL
-    with int_test_app.app_context():
-        updated_int_test = db.session.get(Task, int_test_task_id)
-        assert updated_int_test.status == "In Progress"
+    # Check the row in PostgreSQL 
+    assert get_status(int_test_db, task_id) == "In Progress"
+
+def reject_invalid_test_status(int_test_base_url, int_test_db, int_test_title):
+    task_id = insert_task(int_test_db, int_test_title)
+
+    response = requests.post(
+        f"{int_test_base_url}/update/{task_id}",
+        data={"status": "Archived"},
+        timeout=10,
+    )
+
+    assert "Invalid status" in response.text
+    assert get_status(int_test_db, task_id) == "To Do"

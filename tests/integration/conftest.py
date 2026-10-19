@@ -49,5 +49,5 @@ def int_test_title(int_test_db):
     title = f"{INT_TEST_LABEL} {uuid.uuid4().hex[:8]}" # Builds unique title
     yield title 
     with int_test_db.begin() as conn:
-        conn.execution(text("DELETE FROM tasks WHERE title = :t")), {"t": title}) # Clean up
+        conn.execute(text("DELETE FROM tasks WHERE title = :t"), {"t": title}) # Clean up
 
