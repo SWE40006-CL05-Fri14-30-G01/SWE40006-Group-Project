@@ -168,7 +168,14 @@ def register_routes(app):
 
     @app.get("/health")
     def health():
-        return jsonify(status="healthy", build_id=app.config["BUILD_ID"]), 200
+        build_id = app.config["BUILD_ID"]
+        try:
+            db.session.execute(db.text("SELECT 1"))
+        except Exception:
+            db.session.rollback()
+            logger.exception("Health check could not reach the database")
+            return jsonify(status="unhealthy", database="unreachable", build_id=build_id), 503
+        return jsonify(status="healthy", database="ok", build_id=build_id), 200
 
 
 app = create_app()

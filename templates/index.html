@@ -112,18 +112,25 @@
 
   <main class="container py-4">
 
+    {#
+      Test contract: data-testid attributes are used by the Selenium tests, and
+      scripts/smoke.py finds tasks via the "task-card" class, the exact title text
+      and the /delete/<id> form inside each card. Keep these stable.
+    #}
+
     <!-- Add task bar -->
-    <form action="{{ url_for('add_task') }}" method="post" class="add-bar d-flex flex-column flex-md-row gap-2 mb-4" novalidate>
-      <input type="text" name="title" class="form-control flex-grow-1" placeholder="What needs to be done?" maxlength="200" aria-label="Task title">
+    <form action="{{ url_for('add_task') }}" method="post" class="add-bar d-flex flex-column flex-md-row gap-2 mb-4" novalidate data-testid="add-task-form">
+      <input type="text" name="title" class="form-control flex-grow-1" placeholder="What needs to be done?" maxlength="200" aria-label="Task title" data-testid="task-title-input">
       <div class="divider d-none d-md-block"></div>
-      <input type="text" name="assignee" class="form-control" style="max-width: 260px;" placeholder="Assignee" maxlength="100" aria-label="Assignee">
-      <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Task</button>
+      <input type="text" name="assignee" class="form-control" style="max-width: 260px;" placeholder="Assignee" maxlength="100" aria-label="Assignee" data-testid="task-assignee-input">
+      <button type="submit" class="btn btn-primary" data-testid="add-task-button"><i class="bi bi-plus-lg me-1"></i>Add Task</button>
     </form>
 
     <!-- Flash messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}
-        <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show" role="alert">
+        <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show" role="alert"
+             data-testid="flash-message" data-category="{{ category }}">
           {{ message }}
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
@@ -138,26 +145,27 @@
       {% for status in statuses %}
         {% set idx = loop.index0 %}
         <div class="col-12 col-md-4">
-          <section class="column {{ column_class[status] }}">
+          <section class="column {{ column_class[status] }}" data-testid="column" data-status="{{ status }}">
             <div class="column-header">
               <span>{{ status }}</span>
-              <span class="count">{{ board[status]|length }}</span>
+              <span class="count" data-testid="column-count">{{ board[status]|length }}</span>
             </div>
 
             {% for task in board[status] %}
-              <div class="task-card p-3 mb-3">
+              <div class="task-card p-3 mb-3" data-testid="task-card" data-task-id="{{ task.id }}" data-status="{{ task.status }}">
                 <div class="d-flex justify-content-between align-items-start mb-1">
-                  <span class="badge rounded-pill {{ badge_class[status] }}">{{ status }}</span>
+                  <span class="badge rounded-pill {{ badge_class[status] }}" data-testid="task-status">{{ status }}</span>
                   <span class="task-id">#{{ task.id }}</span>
                 </div>
-                <div class="task-title">{{ task.title }}</div>
-                <div class="task-meta mb-3"><i class="bi bi-person-circle me-1"></i>{{ task.assignee }}</div>
+                <div class="task-title" data-testid="task-title">{{ task.title }}</div>
+                <div class="task-meta mb-3"><i class="bi bi-person-circle me-1"></i><span data-testid="task-assignee">{{ task.assignee }}</span></div>
 
                 <div class="d-flex flex-wrap gap-1">
                   {% if idx > 0 %}
                     <form action="{{ url_for('update_task', task_id=task.id) }}" method="post">
                       <input type="hidden" name="status" value="{{ statuses[idx - 1] }}">
-                      <button class="btn btn-outline-primary btn-xs" title="Move to {{ statuses[idx - 1] }}">
+                      <button class="btn btn-outline-primary btn-xs" title="Move to {{ statuses[idx - 1] }}"
+                              data-testid="move-task" data-target-status="{{ statuses[idx - 1] }}">
                         <i class="bi bi-arrow-left"></i> {{ statuses[idx - 1] }}
                       </button>
                     </form>
@@ -165,14 +173,15 @@
                   {% if idx < statuses|length - 1 %}
                     <form action="{{ url_for('update_task', task_id=task.id) }}" method="post">
                       <input type="hidden" name="status" value="{{ statuses[idx + 1] }}">
-                      <button class="btn btn-outline-primary btn-xs" title="Move to {{ statuses[idx + 1] }}">
+                      <button class="btn btn-outline-primary btn-xs" title="Move to {{ statuses[idx + 1] }}"
+                              data-testid="move-task" data-target-status="{{ statuses[idx + 1] }}">
                         {{ statuses[idx + 1] }} <i class="bi bi-arrow-right"></i>
                       </button>
                     </form>
                   {% endif %}
                   <form action="{{ url_for('delete_task', task_id=task.id) }}" method="post" class="ms-auto"
                         onsubmit="return confirm('Delete this task?');">
-                    <button class="btn btn-outline-danger btn-xs" title="Delete task"><i class="bi bi-trash"></i></button>
+                    <button class="btn btn-outline-danger btn-xs" title="Delete task" data-testid="delete-task"><i class="bi bi-trash"></i></button>
                   </form>
                 </div>
               </div>
@@ -188,7 +197,7 @@
   <footer class="py-3">
     <div class="container d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2">
       <span>DevOps Task Manager &middot; Flask + PostgreSQL</span>
-      <span>Build: <code>{{ build_id }}</code></span>
+      <span>Build: <code data-testid="build-id">{{ build_id }}</code></span>
     </div>
   </footer>
 
