@@ -30,7 +30,14 @@ def int_test_base_url():
 @pytest.fixture(scope="session")
 def int_test_db():
     engine = create_engine(DATABASE_URL.replace("postgres://", "postgresql://", 1))
-    yield engine 
+    with engine.connect() as conn:
+        db_name = conn.execute(text("SELECT current_database()")).scalar_one()
+    if "test" not in db_name:
+        pytest.exit(
+            f"Connected to database '{db_name}', which is not a test database.",
+            returncode=2,
+        )
+    yield engine
     engine.dispose()
 
 # Remove Leftovers from Crashed Runs (only on test labels)
