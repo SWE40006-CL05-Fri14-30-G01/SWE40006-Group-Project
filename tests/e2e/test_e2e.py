@@ -36,6 +36,13 @@ def delete_card(driver, title):
     card.find_element(By.CSS_SELECTOR, css("delete-task")).click()
     WebDriverWait(driver, TIMEOUT).until(EC.alert_is_present()).accept()  
 
+def clean_up_task(driver, base_url, title):
+    # If task still exists, delete the task + confirm it's gone. Raises if it can't
+    driver.get(base_url)
+    if find_card(driver, title):
+        delete_card(driver, title)
+    WebDriverWait(driver, TIMEOUT).until(lambda d: find_card(d, title) is None)
+
 
 def test_task_lifecycle(e2e_driver, e2e_base_url):
     title = f"[e2e] lifecycle {uuid.uuid4().hex[:8]}"
@@ -77,11 +84,5 @@ def test_task_lifecycle(e2e_driver, e2e_base_url):
         WebDriverWait(e2e_driver, TIMEOUT).until(lambda d: find_card(d, title) is None)
 
     finally:
-        # Clean-up
-        # If the test failed halfway, the task is still removed
-        try:
-            e2e_driver.get(e2e_base_url)
-            if find_card(e2e_driver, title):
-                delete_card(e2e_driver, title)
-        except Exception:
-            pass
+        # Clean up 
+        clean_up_task(e2e_driver, e2e_base_url, title)

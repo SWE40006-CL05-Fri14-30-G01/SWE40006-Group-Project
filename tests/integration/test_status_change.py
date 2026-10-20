@@ -35,7 +35,7 @@ def test_change_status(int_test_base_url, int_test_db, int_test_title):
     # Check the row in PostgreSQL 
     assert get_status(int_test_db, task_id) == "In Progress"
 
-def reject_invalid_test_status(int_test_base_url, int_test_db, int_test_title):
+def test_reject_invalid_status(int_test_base_url, int_test_db, int_test_title):
     task_id = insert_task(int_test_db, int_test_title)
 
     response = requests.post(
