@@ -92,7 +92,7 @@ jobs:
           python3 -m scripts.deploy --environment test --state-dir "$STATE_DIR"
       - name: Unit tests, PostgreSQL integration and Selenium gate
         run: |
-          python3 -m venv .release-venv
+          python3.11 -m venv .release-venv
           .release-venv/bin/pip install -r requirements-ci.txt -r requirements-e2e.txt
           .release-venv/bin/python -m pytest tests/test_app.py --junitxml=reports/test-unit.xml
           .release-venv/bin/python -m pytest tests/integration --junitxml=reports/integration.xml
