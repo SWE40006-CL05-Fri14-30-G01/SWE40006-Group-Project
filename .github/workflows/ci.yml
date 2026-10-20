@@ -33,6 +33,64 @@ jobs:
           name: ci-reports-${{ github.run_id }}-${{ github.run_attempt }}
           path: reports/
           retention-days: 14
+  integration-e2e:
+    name: Integration and Selenium Tests
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: taskuser
+          POSTGRES_PASSWORD: taskpass
+          POSTGRES_DB: taskdb_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U taskuser -d taskdb_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://taskuser:taskpass@127.0.0.1:5432/taskdb_test
+      SECRET_KEY: ci-only-secret
+      BUILD_ID: ci-${{ github.sha }}
+      EXPECTED_BUILD_ID: ci-${{ github.sha }}
+      BASE_URL: http://127.0.0.1:5000
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+      - run: pip install -r requirements-ci.txt -r requirements-e2e.txt
+      - name: Build the app image and start it against the temporary PostgreSQL
+        run: |
+          mkdir -p reports
+          docker build -t taskmanager-ci .
+          docker run -d --name taskmanager-app --network host \
+            -e DATABASE_URL -e SECRET_KEY -e BUILD_ID taskmanager-ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:5000/health && break; sleep 2; done
+          curl -fsS http://127.0.0.1:5000/health
+      - name: PostgreSQL integration tests
+        run: python -m pytest tests/integration --junitxml=reports/integration.xml
+      - name: Selenium browser tests
+        run: python -m pytest tests/e2e --junitxml=reports/e2e.xml
+      - name: Fail on failed, skipped or missing tests
+        run: python -m scripts.check_reports reports/integration.xml reports/e2e.xml
+      - name: Save container logs
+        if: always()
+        run: docker logs taskmanager-app > reports/app-container.log 2>&1 || true
+      - name: Save test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-integration-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/
+          retention-days: 14
   docker-build:
     name: Build Docker Image
     runs-on: ubuntu-latest
