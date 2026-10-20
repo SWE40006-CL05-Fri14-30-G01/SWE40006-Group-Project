@@ -121,5 +121,6 @@ The default values are for local development only. Use proper secrets in any rea
 
 See [the release handoff](docs/release-handoff.md) for runner setup, secret names,
 Person 4's test interfaces, local rollback checks and the commissioning checklist.
-Release deployment is manual and disabled by default. The AWS Compose file pulls
+Every merge into `main` is released automatically while the repository variable
+`RELEASE_ENABLED` is `true`; set it to `false` to pause releases. The AWS Compose file pulls
 an immutable `IMAGE_REF`; it no longer builds on the deployment server.
