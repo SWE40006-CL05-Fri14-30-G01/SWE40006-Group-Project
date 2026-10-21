@@ -175,7 +175,7 @@ def register_routes(app):
             db.session.rollback()
             logger.exception("Health check could not reach the database")
             return jsonify(status="unhealthy", database="unreachable", build_id=build_id), 503
-        return jsonify(status="healthy", database="ok", build_id=build_id), 200
+        return jsonify(status="ok", database="ok", build_id=build_id), 200
 
 
 app = create_app()
