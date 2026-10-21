@@ -6,11 +6,12 @@ PR/push CI runs application tests with an 80% application line-coverage gate,
 release-script tests, and a disposable Docker deployment/rollback exercise.
 Evidence is uploaded for 14 days. `requirements-ci.txt` contains coverage tooling.
 
-`release.yml` is **manual only**, restricted to `main`, and disabled unless the
-repository variable `RELEASE_ENABLED` is exactly `true`. It does not run on merges
-yet. The workflow builds/pushes once, records the image digest, deploys that image
-on Test EC2, runs acceptance suites, then promotes it to Production EC2.
-Production has no additional manual approval once this manually initiated run passes tests.
+`release.yml` runs automatically on every push to `main`, including merged pull
+requests, and can still be started manually from the Actions tab. It is disabled
+unless the repository variable `RELEASE_ENABLED` is exactly `true`. The workflow
+builds/pushes once, records the image digest, deploys that image on Test EC2, runs
+acceptance suites, then promotes it to Production EC2. Production has no additional
+manual approval once the run passes tests.
 
 The whole release holds a concurrency lock without cancelling an active run.
 GitHub may replace an older pending run with a newer pending run. Do not manually
@@ -133,7 +134,7 @@ current plan. GitHub does not enforce branch protection or rulesets for this set
 
 This is a team agreement, not an enforced GitHub merge restriction. The release
 workflow still blocks production when its required tests fail. Manual code review
-is separate from deployment: releases remain manually started during commissioning.
+is separate from deployment: once a change is merged, it is released automatically.
 
 ## Commissioning checklist
 
@@ -146,7 +147,8 @@ is separate from deployment: releases remain manually started during commissioni
    production build, data persistence, evidence and notification delivery.
 5. Exercise blocked tests, failed deployment, successful rollback, first-release
    failure and failed recovery in disposable infrastructure before the demo.
-6. Only after commissioning, separately review enabling a `push` trigger on main.
+6. Only after commissioning, merge the `push` trigger on main. To pause automatic
+   releases at any time, set `RELEASE_ENABLED` to `false`.
 
 Useful official references:
 - https://docs.github.com/en/actions/concepts/workflows-and-actions/concurrency

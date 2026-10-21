@@ -1,7 +1,11 @@
-name: Release - Manual commissioning
-# No push trigger until AWS deployment has been commissioned by the team.
+name: Release
+# Runs automatically on every push to main (including merged PRs) once
+# RELEASE_ENABLED is true. workflow_dispatch stays available for manual reruns.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 permissions:
   contents: read
 # One lock spans build, test and production. Never interrupt an active deploy.
