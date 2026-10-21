@@ -93,24 +93,6 @@ def release(candidate, state_dir, activate_fn, verify_fn, diagnostics=lambda sta
     return code
 
 
-def require_rollback_target(state_dir, candidate):
-    """Temporary drill: refuse to replace production without a recovery image."""
-    previous = json.loads((state_dir / "current.json").read_text())
-    validate_release(previous)
-    if previous["image"] == candidate["image"]:
-        raise RuntimeError("Rollback drill requires a different previously verified image")
-
-
-def verify_deployment(base, item, environment, candidate):
-    wait_ready(base, item["build_id"])
-    smoke(base, item["build_id"])
-    # TEMPORARY ROLLBACK DRILL: reject only the new production candidate.
-    # Recovery still performs the real smoke test against the previous image.
-    if environment == "production" and item == candidate:
-        print("ROLLBACK DRILL: intentionally rejecting the new production candidate after smoke checks.")
-        raise RuntimeError("Intentional production verification failure for rollback drill")
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--environment", choices=["test", "production"], required=True)
@@ -134,11 +116,9 @@ def main():
     with (args.state_dir / "deploy.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
-        if args.environment == "production":
-            require_rollback_target(args.state_dir, candidate)
-
         def verify(item):
-            verify_deployment(base, item, args.environment, candidate)
+            wait_ready(base, item["build_id"])
+            smoke(base, item["build_id"])
 
         def diagnostics(stage):
             output = command(["docker", "compose", "-f", str(COMPOSE), "-p",
