@@ -121,28 +121,31 @@ It needs ports 15000, 15432 and 18080 free. The disposable PostgreSQL port is pu
 on the host to allow access from the app container: run this on a trusted machine.
 Local test images/build cache remain for reuse. Reports go to `reports/container-check/`.
 
-## Manual review before merging
+## Automatic merging
 
-The team will use manual review while the repository remains private on the
-current plan. GitHub does not enforce branch protection or rulesets for this setup.
+The public repository enforces the `Protect main` ruleset. Team PRs do not require
+a reviewer approval, but all three required CI checks must pass before merging.
 
-- Make changes on a separate branch and open a pull request; do not push directly to `main`.
-- Get approval from at least one other team member.
-- Confirm all CI checks pass for the latest changes and resolve review comments before merging.
-- If code changes after approval, ask the reviewer to check it again.
-- Do not merge a failed or still-running check. The person merging verifies these conditions.
+- Push changes to a separate branch and open a non-draft PR targeting `main`.
+- `auto-merge.yml` enables auto-merge for the four listed team accounts when the
+  branch belongs to this repository and the author still has write access.
+- GitHub waits for Run Flask Tests, Build Docker Image, and Integration and
+  Selenium Tests. The branch must be up to date and review conversations resolved.
+- Drafts and fork PRs are excluded. Conflicts or an outdated branch may require
+  a developer to update the branch; the workflow does not update branches itself.
+- `AUTO_MERGE_TOKEN` enables merging so the resulting push triggers Release.
+  Keep this repository secret valid and renew it before its expiry.
 
-This is a team agreement, not an enforced GitHub merge restriction. The release
-workflow still blocks production when its required tests fail. Manual code review
-is separate from deployment: once a change is merged, it is released automatically.
+After merging, Release publishes the Docker image, tests it on Test EC2, and
+deploys the same digest to Production. Failed release tests block production;
+failed production verification attempts rollback to the previous verified image.
 
 ## Commissioning checklist
 
-1. Confirm CI passes and obtain a teammate's approval before merging changes and
-   acceptance suites to `main`.
+1. Confirm all required CI checks pass before changes merge to `main`.
 2. Configure variables/secrets, start both runners, and verify RDS connectivity.
-3. Confirm everyone follows the manual review process above. A plan upgrade is
-   not required to continue commissioning.
+3. Verify a team PR automatically merges after its required checks pass and
+   that the resulting push starts Release.
 4. Set `RELEASE_ENABLED=true`, dispatch the release from main, and verify the
    production build, data persistence, evidence and notification delivery.
 5. Exercise blocked tests, failed deployment, successful rollback, first-release
