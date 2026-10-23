@@ -124,3 +124,4 @@ Person 4's test interfaces, local rollback checks and the commissioning checklis
 Every merge into `main` is released automatically while the repository variable
 `RELEASE_ENABLED` is `true`; set it to `false` to pause releases. The AWS Compose file pulls
 an immutable `IMAGE_REF`; it no longer builds on the deployment server.
+This repository contains the SWE40006 DevOps Task Manager project.
