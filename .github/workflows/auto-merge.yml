@@ -1,0 +1,59 @@
+name: Enable auto-merge
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enable-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  enable:
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(fromJSON('["bevithh", "MOUYLY", "Gayatri-beep", "Nisura-W"]'), github.event.pull_request.user.login)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Metadata only: never check out or execute pull request code here.
+      - name: Enable auto-merge for the current PR revision
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_MERGE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::AUTO_MERGE_TOKEN is missing."
+            exit 1
+          fi
+
+          pr=$(gh api "repos/$GH_REPO/pulls/$PR_NUMBER")
+          if ! jq -e --arg repo "$GH_REPO" --arg sha "$EXPECTED_HEAD" '
+            .state == "open" and
+            .draft == false and
+            .base.ref == "main" and
+            .head.repo.full_name == $repo and
+            .head.sha == $sha and
+            (.user.login | ascii_downcase | IN("bevithh", "mouyly", "gayatri-beep", "nisura-w"))
+          ' <<< "$pr" > /dev/null; then
+            echo "PR changed or is no longer eligible; skipping."
+            exit 0
+          fi
+
+          author=$(jq -r '.user.login' <<< "$pr")
+          permission=$(gh api "repos/$GH_REPO/collaborators/$author/permission" --jq '.permission')
+          case "$permission" in
+            admin|maintain|write) ;;
+            *) echo "Author no longer has write access; skipping."; exit 0 ;;
+          esac
+
+          gh pr merge "$PR_NUMBER" --repo "$GH_REPO" --auto --merge --match-head-commit "$EXPECTED_HEAD"
